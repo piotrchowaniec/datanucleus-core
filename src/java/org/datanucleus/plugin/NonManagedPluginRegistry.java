@@ -387,13 +387,39 @@ public class NonManagedPluginRegistry implements PluginRegistry
                         // remove "file:" from path, so we can use in File constructor
                         jarPath = jarPath.substring(5);
                     }
-                    File jarFile = new File(jarPath);
-                    mf = new JarFile(jarFile).getManifest();
-                    if (mf == null)
-                    {
-                        return null;
+                    //jar:file:<jar_path>!/<path_inside_jar>!/plugin.xml
+                    if(isJarEmbedded(path, index)) {
+                        File file = new File(jarPath);
+                        URL rarUrl = file.toURI().toURL();
+
+                        String embeddedJar = path.substring(index+1, path.indexOf(JAR_SEPARATOR,index+1));
+                        if(embeddedJar.startsWith("/")) {
+                            embeddedJar = embeddedJar.substring(1);
+                        }
+                        JarFile rarFile = new JarFile(file);
+                        JarInputStream jis = new JarInputStream(rarFile.getInputStream(rarFile.getEntry(embeddedJar)));
+                        try
+                        {
+                            mf = jis.getManifest();
+                            if (mf == null)
+                            {
+                                return null;
+                            }
+                        }
+                        finally
+                        {
+                            jis.close();
+                        }
+                        return registerBundle(mf, rarUrl);
+                    } else {
+                        File jarFile = new File(jarPath);
+                        mf = new JarFile(jarFile).getManifest();
+                        if (mf == null)
+                        {
+                            return null;
+                        }
+                        return registerBundle(mf, jarFile.toURI().toURL());
                     }
-                    return registerBundle(mf, jarFile.toURI().toURL());
                 }
             }
             else if (manifest.getProtocol().equals("rar") || manifest.getProtocol().equals("war"))
@@ -448,6 +474,10 @@ public class NonManagedPluginRegistry implements PluginRegistry
                 }
             }
         }
+    }
+
+    private boolean isJarEmbedded(String path, int index) {
+        return path.substring(index + 1).contains("!");
     }
 
     /**
